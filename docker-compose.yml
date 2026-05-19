@@ -1,0 +1,16 @@
+services:
+  api:
+    build: .
+    command: pnpm --filter @kansha/api start
+    env_file:
+      - apps/api/.env
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: pnpm --filter @kansha/worker start
+    env_file:
+      - apps/worker/.env
+    restart: unless-stopped

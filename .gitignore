@@ -1,0 +1,17 @@
+node_modules
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+.vite
+.env
+.env.*
+!.env.example
+coverage
+*.log
+*.tsbuildinfo
+apps/web/.vercel
+oracle2nd
+.DS_Store

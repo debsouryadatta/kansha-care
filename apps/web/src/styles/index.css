@@ -1,0 +1,252 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #111827;
+  background: #f7f8fc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(99, 102, 241, 0.1), transparent 28rem),
+    linear-gradient(180deg, #fbfcff 0%, #f4f6fb 100%);
+}
+
+.dashboard-shell {
+  background:
+    radial-gradient(circle at 82% 10%, rgba(79, 70, 229, 0.12), transparent 24rem),
+    radial-gradient(circle at 8% 82%, rgba(129, 140, 248, 0.1), transparent 26rem),
+    #f7f8fc;
+}
+
+.dashboard-panel {
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+.dashboard-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0.25rem 0;
+}
+
+.dashboard-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.landing-motion-panel,
+.landing-motion-card {
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  transform-style: preserve-3d;
+  will-change: opacity, transform, filter;
+}
+
+.landing-hero-visual {
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.12), rgba(248, 250, 252, 0.28)),
+    url("https://images.unsplash.com/photo-1658572352229-14bbe60b3c5b?auto=format&fit=crop&w=2600&q=85") center / cover no-repeat;
+}
+
+.landing-hero-visual::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background:
+    radial-gradient(circle at 68% 40%, rgba(255, 255, 255, 0.08), transparent 24rem),
+    radial-gradient(circle at 22% 24%, rgba(255, 255, 255, 0.52), transparent 22rem);
+}
+
+.landing-hero-visual::after {
+  position: absolute;
+  right: 2%;
+  top: 14%;
+  width: min(48vw, 680px);
+  height: min(48vw, 680px);
+  content: "";
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 90px rgba(255, 255, 255, 0.06),
+    inset 0 0 0 90px rgba(255, 255, 255, 0.03);
+}
+
+.landing-map-card::before {
+  position: absolute;
+  inset: -8% -4%;
+  content: "";
+  background:
+    linear-gradient(132deg, transparent 7%, rgba(255, 255, 255, 0.18) 7.4%, transparent 8.2%, transparent 20%, rgba(255, 255, 255, 0.12) 20.4%, transparent 21.1%, transparent 37%, rgba(255, 255, 255, 0.1) 37.4%, transparent 38.1%, transparent 60%, rgba(255, 255, 255, 0.12) 60.4%, transparent 61.2%),
+    linear-gradient(44deg, transparent 12%, rgba(129, 140, 248, 0.2) 12.4%, transparent 13.1%, transparent 31%, rgba(129, 140, 248, 0.16) 31.4%, transparent 32.1%, transparent 50%, rgba(129, 140, 248, 0.12) 50.4%, transparent 51.1%, transparent 76%, rgba(129, 140, 248, 0.16) 76.3%, transparent 77%);
+  opacity: 0.6;
+  transform: rotate(-7deg);
+}
+
+.landing-map-card {
+  background:
+    linear-gradient(120deg, rgba(79, 70, 229, 0.3), transparent 40%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 54px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 54px),
+    #0f172a;
+}
+
+.landing-marker {
+  border-radius: 999px;
+  background: #818cf8;
+  box-shadow:
+    0 0 0 6px rgba(129, 140, 248, 0.18),
+    0 0 34px rgba(129, 140, 248, 0.68);
+  animation: landing-marker-pulse 2.9s ease-out infinite;
+}
+
+@keyframes landing-marker-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.75;
+  }
+  58% {
+    box-shadow:
+      0 0 0 18px rgba(129, 140, 248, 0),
+      0 0 34px rgba(129, 140, 248, 0.52);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    box-shadow:
+      0 0 0 6px rgba(129, 140, 248, 0.18),
+      0 0 34px rgba(129, 140, 248, 0.68);
+  }
+}
+
+.leaflet-container {
+  min-height: 100%;
+  width: 100%;
+  background: #eef1f7;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.leaflet-pane,
+.leaflet-control {
+  z-index: 400;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  color: #111827;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.leaflet-control-attribution {
+  border-radius: 999px 0 0 0;
+  background: rgba(255, 255, 255, 0.78) !important;
+  color: #64748b;
+}
+
+.leaflet-control-zoom {
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 42px rgba(79, 70, 229, 0.14);
+}
+
+.leaflet-control-zoom a {
+  display: grid !important;
+  width: 38px !important;
+  height: 38px !important;
+  place-items: center;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #111827 !important;
+  font-size: 25px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.leaflet-control-zoom a:first-child {
+  border-radius: 16px 16px 0 0 !important;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+  border-radius: 0 0 16px 16px !important;
+}
+
+.leaflet-control-zoom a:hover,
+.leaflet-control-zoom a:focus {
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+}
+
+.quake-marker {
+  border-radius: 999px;
+  border: 3px solid white;
+  box-shadow: 0 10px 26px rgba(79, 70, 229, 0.25);
+}
+
+.quake-marker-low {
+  background: #6366f1;
+}
+
+.quake-marker-mid {
+  background: #f59e0b;
+}
+
+.quake-marker-high {
+  background: #e11d48;
+}
+
+.quake-marker-active {
+  background: #4f46e5;
+  border-color: white;
+  outline: 7px solid rgba(79, 70, 229, 0.18);
+  box-shadow: 0 18px 38px rgba(79, 70, 229, 0.42);
+}
+
+@media (max-width: 767px) {
+  .dashboard-panel {
+    border-radius: 24px;
+  }
+
+  .dashboard-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-legend {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .dashboard-legend > div {
+    width: 100%;
+    justify-content: center;
+  }
+}
