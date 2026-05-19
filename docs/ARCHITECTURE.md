@@ -1,91 +1,121 @@
 # Architecture
 
-## Overview
+Kansha Monitor treats the USGS earthquake feed like a continuous sensor stream: most events are routine, some need attention, and the source itself must be monitored for silence.
 
-Kansha Monitor is a real-time event pipeline around the USGS GeoJSON feeds. The shape mirrors the elder-care system: continuous sensor-like data, occasional critical events, human-facing dashboards, and alert delivery through a verified channel.
+![Kansha simple architecture preview](./kansha-simple-architecture-preview.png)
 
 ```mermaid
 flowchart LR
-  USGS["USGS feeds"] --> Worker["BullMQ worker"]
-  Worker --> DB["Postgres"]
-  Worker --> Redis["Redis queues"]
+  User["User / Admin"] --> Web["React Web App"]
+  Web --> API["Hono API"]
+  API --> DB["Postgres"]
+  API --> Geo["Geoapify / Photon / Nominatim"]
+  API --> OpenAI["OpenAI via AI SDK"]
+
+  USGS["USGS GeoJSON Feeds"] --> Worker["BullMQ Worker"]
+  Worker --> DB
+  Worker --> Redis["Redis Queue"]
   Worker --> Telegram["Telegram Bot API"]
-  Web["React dashboard"] --> API["Hono API"]
-  API --> DB
-  API --> Nominatim["Nominatim geocoder"]
-  User["Signed-in user"] --> Web
-  User --> Telegram
+  Worker --> OpenAI
+
+  TelegramUser["Telegram User"] --> Telegram
+  Telegram --> Worker
 ```
 
-## Key Choices
+## Main Components
 
-- **Postgres + Drizzle**: structured events, auth, alert history, ingestion logs, and user settings fit relational storage well.
-- **JWT auth**: email/password users get a 7-day signed JWT in an HTTP-only cookie. Protected API routes verify the JWT signature without a session-table lookup.
-- **No PostGIS for MVP**: 30 days of USGS data is small enough for Haversine filtering in TypeScript. At 30,000 monitored locations, proximity checks should move to PostGIS or spatial indexing.
-- **Redis + BullMQ**: separates latency-sensitive web requests from ingestion, alerting, source-silence checks, Telegram bot handling, and daily summaries.
-- **Verified Telegram linking**: the bot is public, but chat IDs are only saved when a logged-in user generates and opens a short-lived one-time token.
-- **Vite React dashboard**: fast to build and deploy, with Leaflet maps and dense operational views.
+- **Web app (`apps/web`)**: React/Vite dashboard with auth, global map, event search, location risk cards, Telegram connection controls, admin user view, and a floating AI assistant.
+- **API (`apps/api`)**: Hono server for auth, dashboard data, locations, Telegram link tokens, admin actions, and streaming assistant chat.
+- **Worker (`apps/worker`)**: BullMQ jobs for backfill, startup catch-up, live polling, alert evaluation, source-silence checks, daily summaries, and the Telegram bot.
+- **Database (`packages/db`)**: Postgres schema and Drizzle migrations.
+- **Shared domain (`packages/types`)**: USGS validation, event normalization, Haversine distance, risk scoring, magnitude bands, alert config, and DTOs.
+- **Assistant (`packages/agent`)**: OpenAI/AI SDK tools for summaries, event search, location risk, Telegram status, and user-approved mutations.
 
-## Data Flow
+## Data Model
 
-1. Worker starts and ensures global app state exists.
-2. If backfill is incomplete, it fetches `all_month.geojson` and upserts events.
-3. Every 60 seconds, worker fetches `all_hour.geojson`.
-4. Each event is normalized and upserted by USGS event ID.
-5. Ingestion health is written to `ingestion_runs` and `app_state`.
-6. Successful live polls immediately evaluate global, local, and swarm alert rules.
-7. Alerts are stored with deterministic dedupe keys before Telegram delivery.
-8. The dashboard reads event, health, alert, location, and Telegram state from the API.
+- `users`: normal users and admins.
+- `earthquake_events`: normalized USGS events plus raw GeoJSON for traceability.
+- `ingestion_runs` and `app_state`: poll history, backfill state, source health, insert/update counts.
+- `monitored_locations`: up to 3 user locations with radius, magnitude threshold, and enabled state.
+- `geocoding_cache`: cached address lookups for API and assistant flows.
+- `telegram_link_tokens` and `telegram_chats`: one-time dashboard-to-Telegram linking and active chat records.
+- `alerts`, `alert_deliveries`, `daily_summaries`: alert history, per-user delivery status, and daily digest status.
+- `agent_conversations`, `agent_messages`, `agent_pending_actions`: web/Telegram assistant state and approval workflow.
 
-## Telegram Verification
+## Runtime Flow
 
-1. User signs in to the web app.
-2. User clicks **Connect Telegram**.
-3. API creates a 15-minute one-time token and stores only its SHA-256 hash.
-4. User opens `https://t.me/<bot>?start=connect_<token>`.
-5. Worker verifies token hash, expiry, unused status, and owning user.
-6. Worker stores the Telegram chat ID against that user.
-7. Unverified Telegram users are told to sign up or connect from the dashboard.
+1. Worker creates global `app_state` on startup.
+2. If needed, it backfills `all_month.geojson`.
+3. After backfill, it runs a startup catch-up from `all_day.geojson`.
+4. A repeatable BullMQ job polls `all_hour.geojson` every 60 seconds.
+5. Events are validated with Zod, normalized, and upserted by USGS event ID.
+6. Each ingestion attempt writes an `ingestion_runs` row and updates global health state.
+7. New or revised events are evaluated for global, local, and swarm alerts.
+8. Alert rows are deduped with deterministic keys before Telegram delivery.
+9. The web app reads dashboard, location, Telegram, and admin data through the API.
+10. The assistant uses the same database-backed tools from web and Telegram, with approval required for mutations.
+
+## Telegram Flow
+
+1. A signed-in user clicks **Connect Telegram**.
+2. API creates a 15-minute token and stores only its SHA-256 hash.
+3. The user opens `https://t.me/<bot>?start=connect_<token>`.
+4. Worker verifies the token, marks it used, and stores the chat ID.
+5. Unlinked Telegram chats are told to connect from the dashboard.
+6. Linked users can receive alerts, request status, ask assistant questions, and approve or deny assistant actions.
 
 ## Alert Rules
 
-- Global high severity: `M >= 5.0`, sent to all linked users.
-- Local high severity: `M >= 4.0` within `500 km` of a user location, sent only to that user.
-- Swarm: more than 5 earthquakes within 30 minutes inside 200 km.
+- Global high severity: magnitude `>= 5.0`, sent to all active Telegram chats.
+- Local high severity: magnitude `>= user threshold` within the user's configured radius.
+- Swarm: more than 5 events in 30 minutes within 200 km.
 - Source silence: no successful USGS poll for more than 10 minutes.
-- Daily summary: 09:00 IST, one per linked user.
+- Daily summary: 09:00 IST with event counts, magnitude bands, active regions, alerts, location risks, and health.
+
+## Key Choices
+
+- **Postgres + Drizzle** keeps events, users, health, alerts, assistant state, and audit-like delivery records in one relational model.
+- **Redis + BullMQ** separates ingestion and scheduled jobs from web request latency.
+- **Hono + Zod** keeps API routes small and validates inputs at the edge.
+- **JWT in HTTP-only cookies** gives simple session handling without a session table for the assignment.
+- **Leaflet maps** provide a quick, understandable incident view for global and nearby events.
+- **Verified Telegram linking** avoids storing random public chat IDs as users.
+- **AI assistant with approvals** can explain data freely, but user-impacting actions are explicit and confirmable.
+- **No PostGIS for MVP** because the assignment data size is small enough for TypeScript Haversine checks.
 
 ## Scaling View
 
-For 1 user and 3 locations, this system is intentionally simple: Postgres, Redis, one API, one worker. The first likely pressure points at 10,000 users and 30,000 locations are local proximity checks, Telegram delivery volume, and worker scheduling.
+At 1 user and 3 locations, one API, one worker, Postgres, and Redis are enough. At 10,000 users and 30,000 locations, the first pressure points are proximity checks, Telegram delivery volume, and repeated dashboard aggregations.
 
 Scale path:
 
-- Move location proximity queries to PostGIS.
-- Partition or index events by time.
-- Split workers by queue: ingestion, alert evaluation, notification delivery, summaries.
-- Batch Telegram deliveries and add retry/backoff policies.
-- Add queue dashboards and structured log shipping.
-- Cache dashboard summaries instead of recomputing per request.
+- Move location proximity queries and swarm detection to PostGIS or a spatial index.
+- Split workers by queue: ingestion, alert evaluation, Telegram delivery, summaries, assistant jobs.
+- Add delivery batching, rate-limit handling, retries, and dead-letter queues for Telegram.
+- Cache dashboard summaries and precompute location risk snapshots.
+- Partition or index events by time and magnitude.
+- Add structured logs, metrics, queue dashboards, and external uptime checks.
+- Store assistant tool results and pending-action expiry cleanup with a scheduled maintenance job.
 
 ## Failure Modes
 
-- **USGS unreachable or bad data**: record failed ingestion run, keep worker alive, surface degraded health.
-- **USGS silent for 10+ minutes**: create source-silence alert once per silence period.
-- **Duplicate event in feed**: upsert by USGS event ID.
-- **USGS revises an event**: update existing event in place.
-- **Duplicate alert risk**: unique alert dedupe keys.
-- **Telegram failure**: record failed delivery without losing the alert.
-- **Unverified Telegram chat**: do not store chat ID; instruct user to connect from dashboard.
-- **Geocoder failure**: return a clear API error and do not create the location.
-- **Worker crash**: repeatable BullMQ jobs are restored when worker restarts.
+- **USGS unreachable or malformed**: record failed ingestion run, mark health degraded, keep worker alive.
+- **USGS silent**: fire a deduped source-silence alert after 10 minutes without success.
+- **Duplicate feed events**: upsert by `usgs_id`.
+- **Revised USGS events**: update normalized fields and raw payload in place.
+- **Duplicate alert risk**: unique `dedupe_key` prevents repeated alert rows.
+- **Telegram send failure**: keep alert, mark delivery failed, continue other sends.
+- **Expired Telegram link**: reject token and ask user to reconnect from dashboard.
+- **Geocoder failure or ambiguity**: return clear API/assistant feedback and avoid creating a bad location.
+- **Worker restart**: repeatable BullMQ jobs are recreated on startup, and startup catch-up fills recent gaps.
+- **Assistant mutation risk**: web actions require client approval; Telegram actions create pending approvals with inline Approve/Deny buttons.
 
 ## Deliberate Omissions
 
-- No vector database; the data is structured/time/geospatial, not semantic.
-- No PostGIS in MVP; Haversine is enough for assignment scale.
-- No live GPS tracking; users monitor chosen places, not current device location.
-- No SMS, WhatsApp, voice calls, or operator workflow.
-- No complex RBAC beyond admin/user.
-- No AI-based alert decisions; safety rules are deterministic and explainable.
-- No Prometheus/Grafana stack; ingestion health is stored and visible in the dashboard.
+- No PostGIS yet; Haversine is enough for the assignment scale.
+- No SMS, WhatsApp, phone-call, or human operator escalation.
+- No complex RBAC beyond `admin` and `user`.
+- No AI-based safety decisions; alert rules stay deterministic.
+- No Prometheus/Grafana stack; health is stored in Postgres and shown in the dashboard.
+- No root `.env`; each app owns its own environment file.
+- No bundled local Postgres/Redis compose services; deployment expects managed or separately run infrastructure.
