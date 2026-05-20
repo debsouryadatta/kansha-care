@@ -65,6 +65,26 @@ type TelegramConnectResult =
   | { connected: true; reactivated: true; chat: TelegramChatStatus }
   | { connected: false; reactivated: false; expiresInMinutes: number; url: string };
 
+function isMobileBrowser() {
+  return /Android|iPad|iPhone|iPod/i.test(window.navigator.userAgent);
+}
+
+function openTelegramConnectUrl(url: string) {
+  if (isMobileBrowser()) {
+    window.location.assign(url);
+    return "redirect";
+  }
+
+  const openedWindow = window.open(url, "_blank");
+  if (!openedWindow) {
+    window.location.assign(url);
+    return "redirect";
+  }
+
+  openedWindow.opener = null;
+  return "new-tab";
+}
+
 export function DashboardPage() {
   const { user, logout } = useAuth();
   const [timeWindow, setTimeWindow] = React.useState<TimeWindow>("24h");
@@ -166,6 +186,20 @@ export function DashboardPage() {
     void refresh({ showLoader: true });
     const timer = window.setInterval(() => void refresh({ showLoader: false }), 60_000);
     return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  React.useEffect(() => {
+    const refreshQuietly = () => void refresh({ showLoader: false, notifyOnError: false });
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshQuietly();
+    };
+
+    window.addEventListener("focus", refreshQuietly);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshQuietly);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [refresh]);
 
   React.useEffect(() => {
@@ -298,8 +332,10 @@ export function DashboardPage() {
         return;
       }
 
-      window.open(result.url, "_blank", "noopener,noreferrer");
-      toast.success("Telegram link opened");
+      const openMode = openTelegramConnectUrl(result.url);
+      if (openMode === "new-tab") {
+        toast.success("Telegram link opened");
+      }
     } catch (err) {
       notifyError(err, "Could not start Telegram connection");
     } finally {
